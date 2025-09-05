@@ -85,6 +85,7 @@
       screen.isDirty = false;
     },
     page: FSM({
+      initially: 'main',
       states: {
         thumbnail: {
           tick() { thumbnail() }
