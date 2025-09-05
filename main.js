@@ -77,8 +77,8 @@
     maxBox: 0,
     handleDirtiness() {
       if (!screen.isDirty) return;
-      screen.width  = effectCanvas.width  = c.width  = 1920; // innerWidth;
-      screen.height = effectCanvas.height = c.height = 1080; // innerHeight;
+      screen.width  = effectCanvas.width  = c.width  = innerWidth;
+      screen.height = effectCanvas.height = c.height = innerHeight;
       screen.center = vec2(screen.width / 2, screen.height / 2);
       screen.minBox = min(screen.width, screen.height);
       screen.maxBox = max(screen.width, screen.height);
@@ -118,14 +118,14 @@
     response: 3,
   });
   screen.updateZoom = Sorder(screen, 'zoom', {
-    frequency: 1.5,
+    frequency: 1,
     springiness: 1.5,
-    response: 3,
+    response: 4,
   });
   on('resize', (event) => screen.isDirty = true );
   
   let border = [];
-  const worldSize = 1;
+  const worldSize = 3;
   const borderSize = 0.01;
   
   let player = {
@@ -145,7 +145,7 @@
   
   let enemies = [];
   const enemySize = 0.05;
-  let enemyDensity = 20/3;
+  let enemyDensity = 10/3;
   let spawningEnemies = true;
   const makeEnemy = ({ pos, hue }) => ({
     pos, vel: vec2(0, 0),
@@ -173,6 +173,15 @@
   const makeGem = ({ pos, vel, col }) => ({
     pos, vel, col, active: true, size: rand(0.001, 0.01)
   });
+  
+  let stars = [];
+  const starSize = 0.1;
+  const starDensity = 1/3;
+  const makeStar = ({ pos, vel, col }) => ({
+    pos, vel, direction: rand(2*PI), col, active: true, health: 10, size: 1,
+  });
+  
+  
   
   let keys = {};
   on('keydown', (event) => keys[event.code] = true );
@@ -238,7 +247,7 @@
     screen.updatePos(1/60);
     
     if (player.isAlive) {
-      screen.zoom = max(0.01, 1 - player.aberrationStrength*10) * screen.zoomMultiplier;
+      screen.zoom = max(0.01, 1 - player.aberrationStrength*20) * screen.zoomMultiplier;
       screen.updateZoom(1/60);
     } else {
       screen.zoom = 0.5 * screen.zoomMultiplier;
@@ -411,14 +420,14 @@
     });
     do {
       enemy.pos = vec2(randpom(worldSize), randpom(worldSize));
-    } while (false && enemy.pos.sub(player.pos).length() < 1 * screen.maxBox/screen.minBox);
+    } while (enemy.pos.sub(player.pos).length() < screen.maxBox/screen.minBox);
     enemies.push(enemy);
   };
   
   const updateEnemies = () => {
     if (enemies.length == 0) {
       firingCooldown = firingCooldown > 1 ? firingCooldown/2 : firingCooldown - 2;
-      enemyDensity *= 1.5;
+      enemyDensity *= 1.1;
       spawningEnemies = true;
       screen.zoomMultiplier *= 0.9;
     }
@@ -442,7 +451,7 @@
           enemy.vel = enemy.vel.add(toPlayer.normalize().mul(0.0001))
         }
         if (toPlayer.length() < player.size) {
-          if (player.abberationStrength > 0) {
+          if (player.aberrationStrength > 0) {
             enemy.health -= 10;
           } else {
             const targetedHealth = 0|rand(3);
@@ -475,7 +484,7 @@
         const toBullet = bullet.pos.sub(enemy.pos);
         if (toBullet.length() > enemySize + bulletSize) continue;
         playSound('fire', { detune: randpom(600) - 1200 })
-        enemy.vel = enemy.vel.sub(toBullet.mul(0.05));
+        enemy.vel = enemy.vel.sub(toBullet.mul(0.1));
         enemy.health -= player.aberrationStrength*10 + 0.2;
         bullet.active = false;
         repeat(10, () => particles.push(makeParticle({
@@ -516,7 +525,7 @@
           gems.push(makeGem({
             pos: enemy.pos.add(vec2(1, 0).mul(rand(enemySize)).turn(rand(2*PI))),
             vel: vec2(0, 0),
-            col: `oklch(${rand(0.5, 0.8)} 0.5 120)`
+            col: `oklch(${rand(0.5, 0.8)} 0.5 ${enemy.hue})`
           }));
         });
         [enemies[i], enemies[enemies.length-1]] = [enemies[enemies.length-1], enemies[i]];
@@ -558,7 +567,7 @@
         ctx.lineTo(x, y);
       }
       if (time % 0.2 < 0.1 && toEnemy.length() < 1 && player.isAlive) {
-        ctx.fillStyle = `oklch(0.5 0.5 ${enemy.hue} / 0.5)`;
+        ctx.fillStyle = `oklch(0.5 0.5 ${enemy.hue} / 0.67)`;
       } else if (player.isAlive) {
         ctx.fillStyle = `oklch(0.5 0.5 ${enemy.hue} / ${clamp(exp(-toEnemy.length()*2), 0.1, 0.5)})`;
       } else {
@@ -614,7 +623,7 @@
       const particle = particles[i];
       
       // const clampedPos = particle.pos.map(e => clamp(e, -worldSize, worldSize));
-      // particle.vel = particle.vel.sub(particle.pos.sub(clampedPos).div(1));
+      // particle.vel = particle.vel.sub(particle.pos.sub(clampedPos).div(5));
       
       particle.vel = particle.vel.mul(0.95);
       particle.pos = particle.pos.add(particle.vel);
@@ -649,7 +658,7 @@
       }
       
       const clampedPos = gem.pos.map(e => clamp(e, -worldSize, worldSize));
-      gem.vel = gem.vel.sub(gem.pos.sub(clampedPos).div(1));
+      gem.vel = gem.vel.sub(gem.pos.sub(clampedPos).div(5));
       
       gem.vel = gem.vel.mul(0.99);
       gem.pos = gem.pos.add(gem.vel);
@@ -671,7 +680,60 @@
     }
   };
   
+  const spawnStar = () => {
+    const star = makeStar({
+      pos: player.pos,
+      vel: vec2(0, 0),
+      col: 'oklch(0.5, 0.5, 60)'
+    });
+    star.updateHealth = Sorder(star, 'health', {
+      frequency: 1,
+      springiness: 0.5,
+      response: 4,
+    });
+    do {
+      star.pos = vec2(randpom(worldSize), randpom(worldSize));
+    } while (star.pos.sub(player.pos).length() < 1 * screen.maxBox/screen.minBox);
+    stars.push(star);
+  };
   
+  const updateStars = () => {
+    if (stars.length < (0|worldSize*worldSize*starDensity)) {
+      spawnStar();
+    }
+  
+    let i = 0;
+    while (i < stars.length) {
+      const star = stars[i];
+      
+      star.vel = star.vel.mul(0.99);
+      star.pos = star.pos.add(star.vel);
+      
+      if (!star.active) {
+        [stars[i], stars[stars.length-1]] = [stars[stars.length-1], stars[i]];      
+        stars.pop();
+      } else i++;
+    }
+  };
+  
+  const renderStars = () => {
+    ctx.globalCompositeOperation = 'lighter';
+    for (const star of stars) {
+      ctx.beginPath();
+      for (let a = 0; a < 2*PI; a+=2*PI/5) {
+        ctx.lineTo(
+          star.pos.x + starSize*cos(a+star.direction),
+          star.pos.y + starSize*sin(a+star.direction),
+        );
+        ctx.lineTo(
+          star.pos.x + 2/3*starSize*cos(a+PI/5+star.direction),
+          star.pos.y + 2/3*starSize*sin(a+PI/5+star.direction),
+        );
+      }
+      ctx.fillStyle = 'rgb(192, 192, 192)';
+      ctx.fill();
+    }
+  };
   
   
   
@@ -811,6 +873,7 @@
     ctx.save();
     ctx.translate(screen.center.x, screen.center.y);
     ctx.scale(screen.minBox*screen.zoom, screen.minBox*screen.zoom);
+    // ctx.scale(screen.minBox/6, screen.minBox/6);
     ctx.translate(-screen.pos.x, -screen.pos.y);
     etx.save();
     etx.translate(screen.center.x, screen.center.y);
@@ -827,6 +890,7 @@
     
     updatePlayer(inWorld);
     updateEnemies();
+    updateStars();
     updateGems();
     updateBullets();
     updateParticles();
@@ -856,6 +920,7 @@
     renderWorld(worldOffset);
     renderPlayer();
     renderEnemies();
+    renderStars();
     if (!invisibleBullets) renderBullets();
     renderGems();
     renderBorder();
